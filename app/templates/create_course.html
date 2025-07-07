@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Create Course{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto bg-white p-6 rounded shadow">
+  <h2 class="text-xl font-bold mb-4">Create a Course</h2>
+  <form method="post">
+    <input name="title" class="border w-full p-2 mb-2" placeholder="Course Title" required>
+    <textarea name="description" class="border w-full p-2 mb-2" placeholder="Description" required></textarea>
+    <input name="class_level" type="number" min="1" max="12" class="border w-full p-2 mb-2" placeholder="Class Level (1-12)" required>
+    <button class="bg-blue-500 text-white px-4 py-2">Create</button>
+  </form>
+</div>
+{% endblock %}

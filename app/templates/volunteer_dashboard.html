@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Volunteer Dashboard{% endblock %}
+
+{% block content %}
+<h2 class="text-2xl font-bold mb-4">Your Courses</h2>
+
+<a href="{{ url_for('volunteer.create') }}" class="bg-green-500 text-white px-4 py-2">Create New Course</a>
+<a href="{{ url_for('auth.logout') }}" class="ml-4 text-red-500">Logout</a>
+
+<ul class="mt-4">
+  {% for item in courses %}
+  <li class="bg-white p-4 mb-2 rounded shadow">
+    <h3 class="text-xl font-semibold">{{ item.course.title }}</h3>
+    <p class="text-gray-700">{{ item.course.description }}</p>
+    <p class="text-sm text-gray-500">Class: {{ item.course.class_level }}</p>
+    <p class="mt-2">
+      <strong>{{ item.enrollment_count }}</strong> students enrolled
+      &bullet;
+      <strong>{{ item.completed_count }}</strong> students completed
+    </p>
+    <a href="{{ url_for('volunteer.add_lesson', course_id=item.course.id) }}"
+       class="inline-block mt-2 text-blue-600 hover:underline">
+      + Add Lesson
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

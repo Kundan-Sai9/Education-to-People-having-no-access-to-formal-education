@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}My Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow mt-8">
+  <h2 class="text-2xl font-bold mb-6 text-gray-800">My Enrolled Courses</h2>
+  
+  {% if enrollments %}
+    <ul class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {% for enrollment in enrollments %}
+        <li class="border border-gray-200 rounded-lg hover:shadow-lg transition-shadow p-5 bg-gray-50">
+          <h3 class="text-lg font-semibold text-gray-900">{{ enrollment.course.title }}</h3>
+          <p class="text-gray-600 mt-2">{{ enrollment.course.description }}</p>
+          <a href="{{ url_for('student.course_detail', course_id=enrollment.course.id) }}"
+             class="inline-block mt-4 text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded shadow-sm">
+            View Course
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-gray-500">You are not enrolled in any courses yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

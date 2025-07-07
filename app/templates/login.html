@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto bg-white p-6 rounded shadow">
+  <h2 class="text-xl font-bold mb-4">Login</h2>
+  {% if error %}
+  <p class="text-red-500">{{ error }}</p>
+  {% endif %}
+  <form method="post">
+    <input name="username" class="border w-full p-2 mb-2" placeholder="Mail">
+    <input name="password" type="password" class="border w-full p-2 mb-2" placeholder="Password">
+    <button class="bg-blue-500 text-white px-4 py-2">Login</button>
+  </form>
+  <p class="mt-2">No account? <a href="{{ url_for('auth.register') }}" class="text-blue-500">Register</a></p>
+</div>
+{% endblock %}
