@@ -1,0 +1,16 @@
+# Override GitHub language detection
+*.html linguist-detectable=false
+*.css linguist-detectable=false
+*.js linguist-detectable=false
+*.py linguist-detectable=true
+
+# Mark specific directories as documentation/vendored to exclude from language stats
+app/templates/* linguist-documentation
+static/* linguist-vendored
+
+# Ensure Python is detected as the main language
+*.py linguist-language=Python
+
+# Optional: Mark certain files as generated (if any)
+# *.min.js linguist-generated=true
+# *.min.css linguist-generated=true
