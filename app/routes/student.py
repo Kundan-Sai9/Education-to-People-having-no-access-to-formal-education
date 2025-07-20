@@ -1,5 +1,5 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session
-from app.models import db, Course, Enrollment, Lesson, LessonProgress, Progress
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify
+from app.models import db, Course, Enrollment, Lesson, LessonProgress, Progress, Video, VideoProgress
 from app.utils.recommendation import recommend_courses
 
 student_bp = Blueprint('student', __name__, url_prefix='/student')
@@ -14,6 +14,13 @@ def dashboard():
         .all()
     )
     return render_template('student_dashboard.html', enrollments=enrollments)
+
+@student_bp.route('/course/<int:course_id>/watch')
+def watch_course(course_id):
+    course = Course.query.get_or_404(course_id)
+    videos = Video.query.filter_by(course_id=course_id).all()
+    return render_template('watch_course.html', course=course, videos=videos)
+
 
 @student_bp.route('/courses')
 def courses():
@@ -104,19 +111,45 @@ def course_detail(course_id):
     # Allow guests to view course details
     course = Course.query.get_or_404(course_id)
     lessons = Lesson.query.filter_by(course_id=course_id).all()
+    videos = Video.query.filter_by(course_id=course_id).all()  # Added videos
 
     progress = None
+    lesson_progress = {}
+    video_progress = {}
+    
     if session.get('role') == 'student':
+        user_id = session['user_id']
         progress = Progress.query.filter_by(
             course_id=course_id,
-            student_id=session['user_id']
+            student_id=user_id
         ).first()
+        
+        # Get lesson completion status
+        completed_lessons = LessonProgress.query.filter_by(
+            student_id=user_id
+        ).join(Lesson, LessonProgress.lesson_id == Lesson.id).filter(
+            Lesson.course_id == course_id,
+            LessonProgress.completed == True
+        ).all()
+        lesson_progress = {lp.lesson_id: lp.completed for lp in completed_lessons}
+        
+        # Get video completion status  
+        completed_videos = VideoProgress.query.filter_by(
+            student_id=user_id
+        ).join(Video, VideoProgress.video_id == Video.id).filter(
+            Video.course_id == course_id,
+            VideoProgress.completed == True
+        ).all()
+        video_progress = {vp.video_id: vp.completed for vp in completed_videos}
 
     return render_template(
         'course_detail.html',
         course=course,
         progress=progress,
-        lessons=lessons
+        lessons=lessons,
+        videos=videos,  # Pass videos to template
+        lesson_progress=lesson_progress,
+        video_progress=video_progress
     )
 
 @student_bp.route('/progress/<int:course_id>/update', methods=['POST'])
@@ -133,42 +166,183 @@ def update_progress(course_id):
 def complete_lesson(lesson_id):
     if session.get('role') != 'student':
         return redirect(url_for('auth.login'))
+    
+    user_id = session['user_id']
+    lesson = Lesson.query.get_or_404(lesson_id)
+    course_id = lesson.course_id
+    
+    # Mark lesson as completed
     progress = LessonProgress.query.filter_by(
-        student_id=session['user_id'],
+        student_id=user_id,
         lesson_id=lesson_id
     ).first()
     if not progress:
-        progress = LessonProgress(student_id=session['user_id'], lesson_id=lesson_id, completed=True)
+        progress = LessonProgress(student_id=user_id, lesson_id=lesson_id, completed=True)
         db.session.add(progress)
     else:
         progress.completed = True
-    db.session.commit()
 
-    lesson = Lesson.query.get_or_404(lesson_id)
-    course_id = lesson.course_id
-
-    total_lessons = Lesson.query.filter_by(course_id=course_id).count()
-    completed_lessons = LessonProgress.query.join(Lesson).filter(
-        Lesson.course_id == course_id,
-        LessonProgress.student_id == session['user_id'],
-        LessonProgress.completed.is_(True)
+    # Calculate progress from videos
+    total_videos = Video.query.filter_by(course_id=course_id).count()
+    completed_videos = VideoProgress.query.filter_by(
+        student_id=user_id
+    ).join(Video, VideoProgress.video_id == Video.id).filter(
+        Video.course_id == course_id,
+        VideoProgress.completed == True
     ).count()
+    
+    # Calculate progress from lessons
+    total_lessons = Lesson.query.filter_by(course_id=course_id).count()
+    completed_lessons = LessonProgress.query.filter_by(
+        student_id=user_id
+    ).join(Lesson, LessonProgress.lesson_id == Lesson.id).filter(
+        Lesson.course_id == course_id,
+        LessonProgress.completed == True
+    ).count()
+    
+    # Calculate overall progress (considering both videos and lessons)
+    total_items = total_videos + total_lessons
+    completed_items = completed_videos + completed_lessons
+    percent_complete = (completed_items / total_items) * 100 if total_items > 0 else 0
 
-    percent_complete = (completed_lessons / total_lessons) * 100 if total_lessons > 0 else 0
-
+    # Update course progress
     course_progress = Progress.query.filter_by(
         course_id=course_id,
-        student_id=session['user_id']
+        student_id=user_id
     ).first()
     if course_progress:
         course_progress.percent_complete = percent_complete
     else:
         course_progress = Progress(
             course_id=course_id,
-            student_id=session['user_id'],
+            student_id=user_id,
             percent_complete=percent_complete
         )
         db.session.add(course_progress)
+    
     db.session.commit()
-
     return redirect(url_for('student.course_detail', course_id=course_id))
+
+@student_bp.route('/complete_video/<int:video_id>', methods=['POST'])
+def complete_video(video_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    video = Video.query.get_or_404(video_id)
+    user_id = session['user_id']
+
+    # Check if already completed
+    existing_vp = VideoProgress.query.filter_by(student_id=user_id, video_id=video_id).first()
+    if existing_vp and existing_vp.completed:
+        # Already completed - return success for AJAX or redirect for form
+        if request.content_type == 'application/json' or request.headers.get('Content-Type') == 'application/json':
+            return jsonify({
+                'success': True, 
+                'message': 'Video already completed',
+                'progress_percent': get_course_progress_percent(user_id, video.course_id)
+            })
+        else:
+            return redirect(url_for('student.course_detail', course_id=video.course_id))
+
+    # Mark video progress
+    if not existing_vp:
+        vp = VideoProgress(student_id=user_id, video_id=video_id, completed=True)
+        db.session.add(vp)
+    else:
+        existing_vp.completed = True
+
+    # Update course-level progress based on both videos and lessons
+    course_id = video.course_id
+    
+    # Calculate progress from videos
+    total_videos = Video.query.filter_by(course_id=course_id).count()
+    completed_videos = VideoProgress.query.filter_by(
+        student_id=user_id
+    ).join(Video, VideoProgress.video_id == Video.id).filter(
+        Video.course_id == course_id,
+        VideoProgress.completed == True
+    ).count()
+    
+    # Calculate progress from lessons
+    total_lessons = Lesson.query.filter_by(course_id=course_id).count()
+    completed_lessons = LessonProgress.query.filter_by(
+        student_id=user_id
+    ).join(Lesson, LessonProgress.lesson_id == Lesson.id).filter(
+        Lesson.course_id == course_id,
+        LessonProgress.completed == True
+    ).count()
+    
+    # Calculate overall progress (considering both videos and lessons)
+    total_items = total_videos + total_lessons
+    completed_items = completed_videos + completed_lessons
+    percent = (completed_items / total_items) * 100 if total_items > 0 else 0
+
+    # Update course progress
+    progress = Progress.query.filter_by(student_id=user_id, course_id=course_id).first()
+    if not progress:
+        progress = Progress(student_id=user_id, course_id=course_id, percent_complete=percent)
+        db.session.add(progress)
+    else:
+        progress.percent_complete = percent
+
+    db.session.commit()
+    
+    # Return appropriate response
+    if request.content_type == 'application/json' or request.headers.get('Content-Type') == 'application/json':
+        return jsonify({
+            'success': True,
+            'message': 'Video completed successfully!',
+            'progress_percent': percent,
+            'completed_videos': completed_videos,
+            'total_videos': total_videos,
+            'completed_lessons': completed_lessons,
+            'total_lessons': total_lessons
+        })
+    else:
+        return redirect(url_for('student.course_detail', course_id=course_id))
+
+def get_course_progress_percent(student_id, course_id):
+    """Helper function to get current course progress percentage"""
+    progress = Progress.query.filter_by(student_id=student_id, course_id=course_id).first()
+    return progress.percent_complete if progress else 0
+
+@student_bp.route('/course/<int:course_id>/progress', methods=['GET'])
+def get_course_progress(course_id):
+    """API endpoint to get current course progress"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user_id = session['user_id']
+    
+    # Get video progress
+    total_videos = Video.query.filter_by(course_id=course_id).count()
+    completed_videos = VideoProgress.query.filter_by(
+        student_id=user_id
+    ).join(Video, VideoProgress.video_id == Video.id).filter(
+        Video.course_id == course_id,
+        VideoProgress.completed == True
+    ).count()
+    
+    # Get lesson progress
+    total_lessons = Lesson.query.filter_by(course_id=course_id).count()
+    completed_lessons = LessonProgress.query.filter_by(
+        student_id=user_id
+    ).join(Lesson, LessonProgress.lesson_id == Lesson.id).filter(
+        Lesson.course_id == course_id,
+        LessonProgress.completed == True
+    ).count()
+    
+    # Calculate overall progress
+    total_items = total_videos + total_lessons
+    completed_items = completed_videos + completed_lessons
+    percent_complete = (completed_items / total_items) * 100 if total_items > 0 else 0
+    
+    return jsonify({
+        'percent_complete': round(percent_complete, 1),
+        'completed_videos': completed_videos,
+        'total_videos': total_videos,
+        'completed_lessons': completed_lessons,
+        'total_lessons': total_lessons,
+        'completed_items': completed_items,
+        'total_items': total_items
+    })

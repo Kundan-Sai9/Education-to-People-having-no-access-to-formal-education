@@ -12,6 +12,12 @@ class Course(db.Model):
     description = db.Column(db.Text, nullable=False)
     class_level = db.Column(db.Integer, nullable=False)
     volunteer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+class Video(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    url = db.Column(db.String(300), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
 
 class Lesson(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -45,9 +51,19 @@ class Enrollment(db.Model):
 
 class LessonProgress(db.Model):
     __table_args__ = (
-        db.UniqueConstraint('student_id', 'lesson_id', name='unique_progress'),
+        db.UniqueConstraint('student_id', 'lesson_id', name='unique_lesson_progress'),
     )
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+
+
+class VideoProgress(db.Model):
+    __table_args__ = (
+        db.UniqueConstraint('student_id', 'video_id', name='unique_video_progress'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
     completed = db.Column(db.Boolean, default=False)

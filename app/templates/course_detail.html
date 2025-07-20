@@ -11,12 +11,12 @@
   <div class="mb-6">
     <h3 class="font-semibold mb-2 text-gray-800">Progress</h3>
     <div class="w-full bg-gray-200 h-4 rounded overflow-hidden">
-      <div
-        class="bg-green-500 h-4 rounded transition-all duration-500"
-        style="width: {% if progress.percent_complete > 0 %}{{ progress.percent_complete }}%{% else %}4px{% endif %};"
-      ></div>
+      <div id="progress-bar"
+           class="bg-green-500 h-4 rounded transition-all duration-500"
+           style="width: {% if progress.percent_complete > 0 %}{{ progress.percent_complete }}%{% else %}4px{% endif %};">
+      </div>
     </div>
-    <p class="text-sm text-gray-600 mt-1">
+    <p class="text-sm text-gray-600 mt-1" id="progress-text">
       {% if progress.percent_complete == 0 %}
         Not started
       {% else %}
@@ -36,22 +36,307 @@
   </div>
   {% endif %}
 
-  <h3 class="font-semibold mb-3 text-gray-800">Lessons</h3>
-  <ul class="space-y-3">
-    {% for lesson in lessons %}
-      <li class="flex items-center justify-between bg-gray-50 border border-gray-200 p-4 rounded hover:shadow">
-        <span class="text-gray-900">{{ lesson.title }}</span>
-        {% if lesson.id in completed_ids %}
-          <span class="text-green-600 font-medium">Completed</span>
-        {% elif progress %}
-          <form method="post" action="{{ url_for('student.complete_lesson', lesson_id=lesson.id) }}">
-            <button class="text-sm text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded">Mark Complete</button>
-          </form>
+  <h3 class="font-semibold mb-3 text-gray-800">Course Content</h3>
+  
+  {% if lessons %}
+  <div class="mb-6">
+    <h4 class="font-medium mb-3 text-gray-700">📚 Lessons</h4>
+    <ul class="space-y-4">
+      {% for lesson in lessons %}
+      <li class="bg-gray-50 border border-gray-200 p-4 rounded shadow
+                 {% if lesson.id in lesson_progress %}border-green-300 bg-green-50{% endif %}">
+        <div class="flex justify-between items-start mb-2">
+          <h5 class="text-lg font-semibold text-gray-800">{{ lesson.title }}</h5>
+          {% if lesson.id in lesson_progress %}
+            <span class="inline-block px-2 py-1 text-xs rounded bg-green-200 text-green-800">✅ Completed</span>
+          {% endif %}
+        </div>
+        <p class="text-gray-700 mb-2">{{ lesson.content }}</p>
+
+        {% if progress %}
+          {% if lesson.id in lesson_progress %}
+            <span class="text-sm text-green-600 font-medium">Lesson completed!</span>
+          {% else %}
+            <form method="post" action="{{ url_for('student.complete_lesson', lesson_id=lesson.id) }}">
+              <button class="text-sm text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded">Mark Complete</button>
+            </form>
+          {% endif %}
         {% else %}
           <span class="text-gray-500 text-sm">Enroll to start</span>
         {% endif %}
       </li>
-    {% endfor %}
-  </ul>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if videos %}
+  <div class="mb-6">
+    <h4 class="font-medium mb-3 text-gray-700">🎥 Videos</h4>
+    <ul class="space-y-4">
+      {% for video in videos %}
+      <li class="bg-gray-50 border border-gray-200 p-4 rounded shadow
+                 {% if video.id in video_progress %}border-green-300 bg-green-50{% endif %}" id="video-item-{{ video.id }}">
+        <div class="flex justify-between items-start mb-2">
+          <h5 class="text-lg font-semibold text-gray-800">{{ video.title }}</h5>
+          {% if video.id in video_progress %}
+            <span class="inline-block px-2 py-1 text-xs rounded bg-green-200 text-green-800">✅ Completed</span>
+          {% endif %}
+        </div>
+        
+        {% set youtube_id = video.url.split('/')[-1].split('?')[0] if 'youtube.com/embed/' in video.url else video.url.split('?v=')[-1].split('&')[0] if 'youtube.com/watch?v=' in video.url else video.url.split('/')[-1].split('?')[0] if 'youtu.be/' in video.url else none %}
+        
+        {% if youtube_id %}
+        <!-- YouTube Player with API for automatic completion -->
+        <div id="video-player-{{ video.id }}" class="mb-3"></div>
+        <script>
+            window.videoData = window.videoData || {};
+            window.videoData[{{ video.id }}] = {
+                youtubeId: '{{ youtube_id }}',
+                videoId: {{ video.id }}
+            };
+        </script>
+        {% else %}
+        <!-- Fallback for non-YouTube videos or if YouTube ID extraction fails -->
+        <div class="embed-responsive embed-responsive-16by9 mb-3">
+          <iframe class="embed-responsive-item rounded" src="{{ video.url }}" allowfullscreen 
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                  referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        </div>
+        {% endif %}
+
+        <div id="video-status-{{ video.id }}" class="mb-2">
+          {% if video.id in video_progress %}
+            <span class="inline-block px-2 py-1 text-xs rounded bg-green-200 text-green-800">✅ Completed</span>
+          {% else %}
+            <span class="inline-block px-2 py-1 text-xs rounded bg-gray-200 text-gray-700">Not Started</span>
+          {% endif %}
+        </div>
+
+        {% if progress %}
+          {% if video.id in video_progress %}
+            <span class="text-sm text-green-600 font-medium">Video completed!</span>
+          {% else %}
+            <form method="post" action="{{ url_for('student.complete_video', video_id=video.id) }}" id="manual-form-{{ video.id }}">
+              <button class="text-sm text-white bg-green-600 hover:bg-green-700 px-3 py-1 rounded" type="submit">
+                Mark Video Complete
+              </button>
+            </form>
+          {% endif %}
+        {% else %}
+          <span class="text-gray-500 text-sm">Enroll to start</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 </div>
+
+{% if progress %}
+<!-- YouTube API for automatic video completion -->
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+let videoPlayers = {};
+let completedVideos = new Set();
+
+// Initialize completed videos from backend data
+{% for video in videos %}
+  {% if video.id in video_progress %}
+    completedVideos.add({{ video.id }});
+  {% endif %}
+{% endfor %}
+
+// YouTube API ready callback
+function onYouTubeIframeAPIReady() {
+    {% for video in videos %}
+    {% set youtube_id = video.url.split('/')[-1].split('?')[0] if 'youtube.com/embed/' in video.url else video.url.split('?v=')[-1].split('&')[0] if 'youtube.com/watch?v=' in video.url else video.url.split('/')[-1].split('?')[0] if 'youtu.be/' in video.url else none %}
+    {% if youtube_id %}
+    if (document.getElementById('video-player-{{ video.id }}')) {
+        try {
+            videoPlayers[{{ video.id }}] = new YT.Player('video-player-{{ video.id }}', {
+                height: '315',
+                width: '100%',
+                videoId: '{{ youtube_id }}',
+                playerVars: {
+                    'playsinline': 1,
+                    'rel': 0,
+                    'modestbranding': 1,
+                    'enablejsapi': 1,
+                    'origin': window.location.origin
+                },
+                events: {
+                    'onStateChange': function(event) {
+                        handleVideoStateChange(event, {{ video.id }});
+                    },
+                    'onError': function(event) {
+                        console.error('YouTube player error for video {{ video.id }}:', event.data);
+                        // Fallback to iframe if player fails
+                        const playerDiv = document.getElementById('video-player-{{ video.id }}');
+                        if (playerDiv) {
+                            playerDiv.innerHTML = '<iframe width="100%" height="315" src="https://www.youtube.com/embed/{{ youtube_id }}?enablejsapi=1&origin=' + window.location.origin + '" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>';
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error creating YouTube player for video {{ video.id }}:', error);
+            // Fallback to iframe
+            const playerDiv = document.getElementById('video-player-{{ video.id }}');
+            if (playerDiv) {
+                playerDiv.innerHTML = '<iframe width="100%" height="315" src="https://www.youtube.com/embed/{{ youtube_id }}?enablejsapi=1&origin=' + window.location.origin + '" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>';
+            }
+        }
+    }
+    {% endif %}
+    {% endfor %}
+}
+
+function handleVideoStateChange(event, videoId) {
+    if (event.data == YT.PlayerState.ENDED) {
+        // Video finished - automatically mark as complete
+        autoCompleteVideo(videoId);
+    } else if (event.data == YT.PlayerState.PLAYING) {
+        // Video started playing
+        updateVideoStatus(videoId, 'watching');
+    }
+}
+
+async function autoCompleteVideo(videoId) {
+    if (completedVideos.has(videoId)) {
+        return; // Already completed
+    }
+
+    try {
+        const response = await fetch(`/student/complete_video/${videoId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        if (response.ok) {
+            completedVideos.add(videoId);
+            updateVideoStatus(videoId, 'completed');
+            updateOverallProgress();
+            
+            // Hide manual completion form
+            const manualForm = document.getElementById(`manual-form-${videoId}`);
+            if (manualForm) {
+                manualForm.style.display = 'none';
+            }
+            
+            // Update video item styling
+            const videoItem = document.getElementById(`video-item-${videoId}`);
+            if (videoItem) {
+                videoItem.classList.add('border-green-300', 'bg-green-50');
+                videoItem.classList.remove('border-gray-200', 'bg-gray-50');
+            }
+            
+            // Show success notification
+            showAutoCompleteNotification();
+        }
+    } catch (error) {
+        console.error('Error auto-completing video:', error);
+    }
+}
+
+function updateVideoStatus(videoId, status) {
+    const statusElement = document.getElementById(`video-status-${videoId}`);
+    if (statusElement) {
+        let statusHTML;
+        switch (status) {
+            case 'watching':
+                statusHTML = '<span class="inline-block px-2 py-1 text-xs rounded bg-blue-200 text-blue-800">🎬 Watching...</span>';
+                break;
+            case 'completed':
+                statusHTML = '<span class="inline-block px-2 py-1 text-xs rounded bg-green-200 text-green-800">✅ Completed</span>';
+                break;
+            default:
+                statusHTML = '<span class="inline-block px-2 py-1 text-xs rounded bg-gray-200 text-gray-700">Not Started</span>';
+        }
+        statusElement.innerHTML = statusHTML;
+    }
+}
+
+function updateOverallProgress() {
+    // Fetch updated progress via AJAX
+    fetch(`/student/course/{{ course.id }}/progress`)
+        .then(response => response.json())
+        .then(data => {
+            // Update progress bar
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            
+            if (progressBar && progressText) {
+                const percent = data.percent_complete;
+                progressBar.style.width = percent > 0 ? `${percent}%` : '4px';
+                
+                if (percent === 0) {
+                    progressText.textContent = 'Not started';
+                } else {
+                    progressText.textContent = `${percent}% complete (${data.completed_items}/${data.total_items} items)`;
+                }
+                
+                // Add completion message if 100%
+                if (percent >= 100) {
+                    let completionMsg = document.querySelector('.completion-message');
+                    if (!completionMsg) {
+                        completionMsg = document.createElement('div');
+                        completionMsg.className = 'mt-2 text-green-700 font-semibold completion-message';
+                        completionMsg.innerHTML = '🎉 Course Completed!';
+                        progressText.parentNode.appendChild(completionMsg);
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error updating progress:', error);
+            // Fallback to reload if AJAX fails
+            setTimeout(() => location.reload(), 1000);
+        });
+}
+
+function showAutoCompleteNotification() {
+    // Create floating notification
+    const notification = document.createElement('div');
+    notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+    notification.innerHTML = '🎉 Video completed automatically!';
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 3000);
+}
+
+// Handle manual form submissions for lessons and non-YouTube videos
+document.querySelectorAll('form[action*="complete_"]').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        const button = form.querySelector('button');
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Processing...';
+        
+        // For lesson completion, update progress after form submission
+        if (form.action.includes('complete_lesson')) {
+            setTimeout(() => {
+                updateOverallProgress();
+            }, 500);
+        }
+        
+        // Allow form to submit normally, but show feedback
+        setTimeout(() => {
+            if (!form.action.includes('complete_video')) {
+                // For lessons, reload the page to show updated state
+                location.reload();
+            }
+        }, 1000);
+    });
+});
+</script>
+{% endif %}
 {% endblock %}

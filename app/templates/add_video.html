@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Add Video to {{ course.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow mt-8">
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Add Video to {{ course.title }}</h1>
+    
+    {% if error %}
+    <div class="bg-red-50 border border-red-200 text-red-800 p-4 rounded mb-6">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    <form method="POST" class="space-y-6">
+        <div>
+            <label for="title" class="block text-sm font-medium text-gray-700 mb-2">
+                Video Title *
+            </label>
+            <input type="text" 
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                   id="title" 
+                   name="title" 
+                   placeholder="e.g., Introduction to Algebra"
+                   required>
+        </div>
+        
+        <div>
+            <label for="url" class="block text-sm font-medium text-gray-700 mb-2">
+                Video URL *
+            </label>
+            <input type="url" 
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                   id="url" 
+                   name="url" 
+                   placeholder="Paste YouTube, Vimeo, or direct video URL here"
+                   required>
+            <div class="mt-2 text-sm text-gray-600">
+                <p class="mb-1"><strong>Supported formats:</strong></p>
+                <ul class="list-disc list-inside space-y-1 text-xs">
+                    <li>YouTube: https://www.youtube.com/watch?v=VIDEO_ID</li>
+                    <li>YouTube Short: https://youtu.be/VIDEO_ID</li>
+                    <li>Vimeo: https://vimeo.com/VIDEO_ID</li>
+                    <li>Direct video: https://example.com/video.mp4</li>
+                </ul>
+                <p class="mt-2 text-blue-600">URLs will be automatically converted to embed format</p>
+            </div>
+        </div>
+        
+        <div class="flex space-x-4">
+            <button type="submit" 
+                    class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                Add Video
+            </button>
+            <a href="{{ url_for('student.course_detail', course_id=course.id) }}" 
+               class="px-6 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                Cancel
+            </a>
+        </div>
+    </form>
+    
+    <!-- Preview section for testing URLs -->
+    <div class="mt-8 p-4 bg-gray-50 rounded-md">
+        <h3 class="text-sm font-medium text-gray-700 mb-2">💡 Tips for adding videos:</h3>
+        <ul class="text-sm text-gray-600 space-y-1">
+            <li>• Copy the URL directly from your browser's address bar</li>
+            <li>• YouTube videos will automatically support progress tracking</li>
+            <li>• Make sure videos are publicly accessible</li>
+            <li>• Use descriptive titles to help students understand the content</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+// Simple URL validation and preview
+document.getElementById('url').addEventListener('input', function(e) {
+    const url = e.target.value;
+    const isValid = url.match(/^https?:\/\//) && 
+                   (url.includes('youtube.com') || url.includes('youtu.be') || 
+                    url.includes('vimeo.com') || url.includes('.mp4') || 
+                    url.includes('.webm') || url.includes('embed'));
+    
+    if (url && !isValid) {
+        e.target.style.borderColor = '#ef4444';
+    } else {
+        e.target.style.borderColor = '#d1d5db';
+    }
+});
+</script>
+{% endblock %}

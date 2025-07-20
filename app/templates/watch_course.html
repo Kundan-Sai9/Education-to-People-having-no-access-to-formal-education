@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Watch {{ course.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>{{ course.title }}</h1>
+    <p>{{ course.description }}</p>
+    
+    <!-- Progress Bar -->
+    {% if session.get('role') == 'student' %}
+    <div class="mb-4">
+        <h4>Course Progress</h4>
+        <div class="progress mb-2">
+            <div id="course-progress-bar" class="progress-bar bg-success" role="progressbar" 
+                 style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                <span id="progress-text">0%</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="row">
+        <div class="col-md-8">
+            {% if videos %}
+                <h3>Videos</h3>
+                {% for video in videos %}
+                <div class="card mb-3" id="video-card-{{ video.id }}">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ video.title }}</h5>
+                        
+                        <!-- Extract YouTube video ID from embed URL -->
+                        {% set youtube_id = video.url.split('embed/')[-1].split('?')[0] if 'youtube.com/embed/' in video.url else none %}
+                        
+                        {% if youtube_id %}
+                        <!-- YouTube Player with API -->
+                        <div id="player-{{ video.id }}" class="video-player mb-3"></div>
+                        <script>
+                            // Store video data for the player
+                            window.videoData = window.videoData || {};
+                            window.videoData[{{ video.id }}] = {
+                                youtubeId: '{{ youtube_id }}',
+                                videoId: {{ video.id }},
+                                title: '{{ video.title }}'
+                            };
+                        </script>
+                        {% else %}
+                        <!-- Fallback for non-YouTube videos -->
+                        <div class="embed-responsive embed-responsive-16by9 mb-3">
+                            <iframe class="embed-responsive-item" src="{{ video.url }}" allowfullscreen></iframe>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Completion Status -->
+                        <div id="completion-status-{{ video.id }}" class="mb-2">
+                            <span class="badge badge-secondary">Not Started</span>
+                        </div>
+                        
+                        <!-- Manual completion button (fallback) -->
+                        <form method="POST" action="{{ url_for('student.complete_video', video_id=video.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-success btn-sm" id="manual-complete-{{ video.id }}">
+                                Mark as Completed
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>No videos available for this course yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- YouTube API Script -->
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+let players = {};
+let completedVideos = new Set();
+
+// YouTube API ready callback
+function onYouTubeIframeAPIReady() {
+    // Create players for each video
+    {% for video in videos %}
+    {% set youtube_id = video.url.split('/')[-1] if 'youtube.com/embed/' in video.url else video.url.split('?v=')[-1].split('&')[0] if 'youtube.com/watch?v=' in video.url else none %}
+    {% if youtube_id %}
+    if (document.getElementById('player-{{ video.id }}')) {
+        players[{{ video.id }}] = new YT.Player('player-{{ video.id }}', {
+            height: '315',
+            width: '560',
+            videoId: '{{ youtube_id }}',
+            playerVars: {
+                'playsinline': 1,
+                'rel': 0,
+                'modestbranding': 1
+            },
+            events: {
+                'onReady': onPlayerReady,
+                'onStateChange': onPlayerStateChange
+            }
+        });
+    }
+    {% endif %}
+    {% endfor %}
+}
+
+function onPlayerReady(event) {
+    console.log('Player ready');
+}
+
+function onPlayerStateChange(event) {
+    const playerId = Object.keys(players).find(key => players[key] === event.target);
+    
+    if (event.data == YT.PlayerState.ENDED) {
+        // Video finished playing
+        markVideoAsCompleted(playerId);
+    } else if (event.data == YT.PlayerState.PLAYING) {
+        // Video started playing
+        updateVideoStatus(playerId, 'watching');
+    }
+}
+
+async function markVideoAsCompleted(videoId) {
+    if (completedVideos.has(videoId)) {
+        return; // Already marked as completed
+    }
+    
+    try {
+        const response = await fetch(`/student/complete_video/${videoId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        if (response.ok) {
+            completedVideos.add(videoId);
+            updateVideoStatus(videoId, 'completed');
+            updateCourseProgress();
+            
+            // Show success message
+            showNotification(`Video completed automatically!`, 'success');
+            
+            // Hide manual completion button
+            const manualButton = document.getElementById(`manual-complete-${videoId}`);
+            if (manualButton) {
+                manualButton.style.display = 'none';
+            }
+        } else {
+            console.error('Failed to mark video as completed');
+            showNotification('Failed to update progress. Please try manually.', 'error');
+        }
+    } catch (error) {
+        console.error('Error marking video as completed:', error);
+        showNotification('Failed to update progress. Please try manually.', 'error');
+    }
+}
+
+function updateVideoStatus(videoId, status) {
+    const statusElement = document.getElementById(`completion-status-${videoId}`);
+    if (statusElement) {
+        let badgeClass, statusText;
+        switch (status) {
+            case 'watching':
+                badgeClass = 'badge-primary';
+                statusText = 'Watching...';
+                break;
+            case 'completed':
+                badgeClass = 'badge-success';
+                statusText = '✅ Completed';
+                break;
+            default:
+                badgeClass = 'badge-secondary';
+                statusText = 'Not Started';
+        }
+        statusElement.innerHTML = `<span class="badge ${badgeClass}">${statusText}</span>`;
+    }
+}
+
+function updateCourseProgress() {
+    // Calculate progress based on completed videos
+    const totalVideos = {{ videos|length }};
+    const completedCount = completedVideos.size;
+    const progressPercentage = Math.round((completedCount / totalVideos) * 100);
+    
+    // Update progress bar
+    const progressBar = document.getElementById('course-progress-bar');
+    const progressText = document.getElementById('progress-text');
+    
+    if (progressBar && progressText) {
+        progressBar.style.width = progressPercentage + '%';
+        progressBar.setAttribute('aria-valuenow', progressPercentage);
+        progressText.textContent = progressPercentage + '%';
+        
+        if (progressPercentage === 100) {
+            showNotification('🎉 Congratulations! You completed all videos in this course!', 'success');
+        }
+    }
+}
+
+function showNotification(message, type) {
+    // Create and show a temporary notification
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
+    notification.style.position = 'fixed';
+    notification.style.top = '20px';
+    notification.style.right = '20px';
+    notification.style.zIndex = '9999';
+    notification.style.minWidth = '300px';
+    
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="close" data-dismiss="alert">
+            <span>&times;</span>
+        </button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 5000);
+}
+
+// Initialize progress on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateCourseProgress();
+});
+</script>
+{% endblock %}
